@@ -1,0 +1,266 @@
+<!DOCTYPE html><html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Dieu Éviter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+    import { getFirestore, collection, getDocs, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+window.auth = auth;
+window.db = db;
+window.signIn = async function() {
+  const email = prompt("メールアドレスを入力してください：");
+  const password = prompt("パスワードを入力してください：");
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (e) {
+    alert("ログイン失敗: " + e.message);
+  }
+};
+
+window.saveToPlaylist = async function(video) {
+  const user = auth.currentUser;
+  if (!user) return alert("ログインが必要です");
+  const ref = doc(db, "playlists", user.uid);
+  const docSnap = await getDoc(ref);
+  const list = docSnap.exists() ? docSnap.data().items : [];
+  list.push(video);
+  await setDoc(ref, { items: list });
+  alert("プレイリストに追加しました");
+};
+
+window.loadPlaylist = async function() {
+  const user = auth.currentUser;
+  if (!user) return alert("ログインが必要です");
+  const ref = doc(db, "playlists", user.uid);
+  const docSnap = await getDoc(ref);
+  const list = docSnap.exists() ? docSnap.data().items : [];
+  renderResults(list);
+};
+
+onAuthStateChanged(auth, user => {
+  const btn = document.getElementById("loginBtn");
+  if (user) {
+    btn.textContent = `ログアウト (${user.email})`;
+    btn.onclick = () => signOut(auth);
+  } else {
+    btn.textContent = "ログイン";
+    btn.onclick = signIn;
+  }
+});
+
+  </script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #121212;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      text-align: center;
+      padding: 40px 20px 10px;
+    }
+    header h1 {
+      font-size: 3em;
+      font-weight: bold;
+      color: gold;
+      margin: 0;
+    }
+    .search-bar {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 25px;
+      border: none;
+      outline: none;
+      background-color: #1f1f1f;
+      color: white;
+    }
+    .login-btn {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      background: none;
+      color: white;
+      border: 1px solid white;
+      border-radius: 20px;
+      padding: 5px 15px;
+      cursor: pointer;
+    }
+    .container {
+      display: flex;
+      flex-direction: row;
+    }
+    .sidebar {
+      width: 220px;
+      background: #181818;
+      height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .sidebar button {
+      display: block;
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      font-size: 16px;
+      background: none;
+      border: none;
+      color: white;
+      text-align: left;
+      cursor: pointer;
+    }
+    .sidebar button:hover {
+      background: #2c2c2c;
+    }
+    .content {
+      flex: 1;
+      padding: 20px;
+    }
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .video-item {
+      background: #1e1e1e;
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      gap: 15px;
+      cursor: pointer;
+    }
+    .video-item:hover {
+      background: #2a2a2a;
+    }
+    .video-item img {
+      width: 160px;
+      border-radius: 10px;
+    }
+    .video-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .video-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .audio-player {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1f1f1f;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .audio-player audio {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dieu Éviter</h1>
+    <button id="loginBtn" class="login-btn">ログイン</button>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="動画を検索...">
+    </div>
+  </header>  <div class="container">
+    <div class="sidebar">
+      <button onclick="loadTrending()">人気</button>
+      <button onclick="loadPlaylist()">プレイリスト</button>
+      <button onclick="loadHistory()">履歴</button>
+    </div>
+    <div class="content">
+      <div class="results" id="results"></div>
+    </div>
+  </div>  <div class="audio-player" id="player" style="display:none">
+    <img id="playerThumb" src="" width="80" height="45">
+    <div id="playerTitle">再生中</div>
+    <audio controls id="audio" autoplay></audio>
+  </div>  <script>
+    async function searchVideos(query) {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      renderResults(data);
+    }
+
+    function renderResults(data) {
+      const container = document.getElementById('results');
+      container.innerHTML = '';
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'video-item';
+        div.innerHTML = `
+          <img src="${item.thumbnail}" />
+          <div class="video-info">
+            <div class="video-title">${item.title}</div>
+            <div>${item.author.name}</div>
+            <button onclick='event.stopPropagation(); saveToPlaylist(${JSON.stringify(item)})'>＋ プレイリスト</button>
+          </div>
+        `;
+        div.onclick = async () => {
+          const streamRes = await fetch(`/api/stream?id=${item.videoId}`);
+          const stream = await streamRes.json();
+          document.getElementById('player').style.display = 'flex';
+          document.getElementById('playerThumb').src = stream.thumbnail;
+          document.getElementById('playerTitle').textContent = stream.title;
+          const audio = document.getElementById('audio');
+          audio.src = stream.url;
+          audio.play();
+          const history = JSON.parse(localStorage.getItem('history') || '[]');
+          history.unshift(item);
+          localStorage.setItem('history', JSON.stringify(history.slice(0, 50)));
+        };
+        container.appendChild(div);
+      });
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        const query = e.target.value;
+        await searchVideos(query);
+      }
+    });
+
+    async function loadTrending() {
+      const res = await fetch('/api/trending');
+      const data = await res.json();
+      renderResults(data);
+    }
+
+    function loadHistory() {
+      const data = JSON.parse(localStorage.getItem('history') || '[]');
+      renderResults(data);
+    }
+
+    loadTrending();
+  </script></body>
+</html>
