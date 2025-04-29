@@ -9,6 +9,7 @@ class InstanceCollector:
         self.sources = [
             "https://api.invidious.io/instances.json",  # Invidious公式
             "https://raw.githubusercontent.com/mochidukiyukimi/yuki-youtube-instance/main/instance.txt",  # もちづきさん
+            "https://raw.githubusercontent.com/yuto1106110/yuto-yuki-youtube-1/main/APItati",
             # （必要ならここにさらに追加できる）
         ]
         # 手持ちの静的インスタンスリスト
