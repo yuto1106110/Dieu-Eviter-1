@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -7,10 +8,15 @@
 </head>
 <body>
 
+<header>
+  <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+  <h1 class="site-title">Dieu Éviter</h1>
+</header>
+
 <div class="container">
 
   <!-- サイドバー -->
-  <nav class="sidebar">
+  <nav id="sidebar" class="sidebar">
     <ul>
       <li><a href="#" onclick="loadTrending()">人気動画</a></li>
       <li><a href="#" onclick="showChannelInput()">チャンネルを見る</a></li>
@@ -21,8 +27,7 @@
 
   <!-- メインコンテンツ -->
   <main class="main-content">
-    <h1 class="title">Dieu Éviter</h1>
-    <div class="search-box">
+    <div class="search-area">
       <input type="text" id="searchInput" placeholder="検索ワードを入力">
       <button onclick="search()">検索</button>
     </div>
