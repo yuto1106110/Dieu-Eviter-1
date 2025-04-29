@@ -1,95 +1,92 @@
-# Dieu Eviter: Flask-based Invidious Proxy + yt-dlp backend
 
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from api_manager import APIManager
 import requests
-import subprocess
-import json
-import random
+import urllib.parse
 
-app = Flask(__name__)
+app = FastAPI()
+api_manager = APIManager()
 
-# 使用するInvidiousインスタンス一覧
-INVIDIOUS_INSTANCES = [
-    "https://yewtu.be",
-    "https://vid.puffyan.us",
-    "https://inv.tux.pizza",
-    "https://invidious.slipfox.xyz"
-]
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-def get_fastest_instance(endpoint="/api/v1/trending"):
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/trending", response_class=JSONResponse)
+async def trending():
+    try:
+        api = api_manager.get_api()
+        res = requests.get(api.rstrip('/') + '/api/v1/trending', timeout=10)
+        return res.json()
+    except Exception as e:
+        print(f"[trending] エラー: {e}")
+        return JSONResponse(content={"error": "トレンド取得に失敗しました"}, status_code=500)
+
+
+@app.get("/search", response_class=JSONResponse)
+async def search(q: str, page: int = 1):
     results = []
-    for instance in INVIDIOUS_INSTANCES:
-        try:
-            r = requests.get(instance + endpoint, timeout=2)
-            if r.status_code == 200:
-                results.append((instance, r.elapsed.total_seconds()))
-        except:
-            continue
-    if results:
-        return sorted(results, key=lambda x: x[1])[0][0]
-    return random.choice(INVIDIOUS_INSTANCES)
-
-@app.route("/api/search")
-def search():
-    query = request.args.get("q")
-    if not query:
-        return jsonify({"error": "Missing search query"}), 400
-    instance = get_fastest_instance()
     try:
-        res = requests.get(f"{instance}/api/v1/search", params={"q": query})
-        return jsonify(res.json())
+        api = api_manager.get_api()
+        search_url = f"{api.rstrip('/')}/api/v1/search?q={urllib.parse.quote(q)}&page={page}&hl=ja"
+        res = requests.get(search_url, timeout=10)
+        if res.ok:
+            results += res.json()
     except Exception as e:
-        return jsonify({"error": "API failed", "detail": str(e)}), 500
+        print(f"[search] Invidious検索失敗: {e}")
 
-@app.route("/api/video")
-def get_video():
-    video_id = request.args.get("id")
-    if not video_id:
-        return jsonify({"error": "Missing video ID"}), 400
-    instance = get_fastest_instance()
+    # Googleサジェスト追加
     try:
-        res = requests.get(f"{instance}/api/v1/videos/{video_id}")
-        return jsonify(res.json())
+        suggest_url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={urllib.parse.quote(q)}"
+        res2 = requests.get(suggest_url, timeout=10)
+        if res2.ok:
+            suggestions = res2.json()[1]
+            for s in suggestions:
+                results.append({"type": "suggestion", "title": s})
     except Exception as e:
-        return jsonify({"error": "API failed", "detail": str(e)}), 500
+        print(f"[search] Googleサジェスト失敗: {e}")
 
-@app.route("/api/channel")
-def get_channel():
-    channel_id = request.args.get("id")
-    if not channel_id:
-        return jsonify({"error": "Missing channel ID"}), 400
-    instance = get_fastest_instance()
+    return results
+
+
+@app.get("/watch", response_class=JSONResponse)
+async def watch(v: str):
     try:
-        res = requests.get(f"{instance}/api/v1/channels/{channel_id}")
-        return jsonify(res.json())
+        api = api_manager.get_api()
+        video_url = f"{api.rstrip('/')}/api/v1/videos/{urllib.parse.quote(v)}"
+        res = requests.get(video_url, timeout=10)
+        return res.json()
     except Exception as e:
-        return jsonify({"error": "API failed", "detail": str(e)}), 500
+        print(f"[watch] エラー: {e}")
+        return JSONResponse(content={"error": "動画情報取得に失敗しました"}, status_code=500)
 
-@app.route("/api/stream")
-def get_stream():
-    video_id = request.args.get("id")
-    if not video_id:
-        return jsonify({"error": "Missing video ID"}), 400
-    url = f"https://www.youtube.com/watch?v={video_id}"
+
+@app.get("/channel", response_class=JSONResponse)
+async def channel(c: str):
     try:
-        result = subprocess.run(["yt-dlp", "-f", "bestaudio", "-j", url], capture_output=True, text=True)
-        info = json.loads(result.stdout)
-        return jsonify({
-            "url": info["url"],
-            "title": info.get("title"),
-            "thumbnail": info.get("thumbnail")
-        })
+        api = api_manager.get_api()
+        channel_url = f"{api.rstrip('/')}/api/v1/channels/{urllib.parse.quote(c)}"
+        res = requests.get(channel_url, timeout=10)
+        return res.json()
     except Exception as e:
-        return jsonify({"error": "yt-dlp failed", "detail": str(e)}), 500
+        print(f"[channel] エラー: {e}")
+        return JSONResponse(content={"error": "チャンネル情報取得に失敗しました"}, status_code=500)
 
-@app.route("/api/trending")
-def trending():
-    instance = get_fastest_instance()
+
+@app.get("/playlist", response_class=JSONResponse)
+async def playlist(p: str, page: int = 1):
     try:
-        res = requests.get(f"{instance}/api/v1/trending")
-        return jsonify(res.json())
+        api = api_manager.get_api()
+        playlist_url = f"{api.rstrip('/')}/api/v1/playlists/{urllib.parse.quote(p)}?page={page}"
+        res = requests.get(playlist_url, timeout=10)
+        return res.json()
     except Exception as e:
-        return jsonify({"error": "API failed", "detail": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(debug=True)
+        print(f"[playlist] エラー: {e}")
+        return JSONResponse(content={"error": "プレイリスト情報取得に失敗しました"}, status_code=500)
